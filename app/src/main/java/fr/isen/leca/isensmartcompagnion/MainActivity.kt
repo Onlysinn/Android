@@ -6,15 +6,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material3.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,11 +34,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
-import fr.isen.leca.isensmartcompagnion.models.Event
+import fr.isen.leca.isensmartcompagnion.database.ChatDatabase
+import fr.isen.leca.isensmartcompagnion.database.ChatMessage
+import fr.isen.leca.isensmartcompagnion.models.Gemini
 import fr.isen.leca.isensmartcompagnion.screens.AgendaScreen
 import fr.isen.leca.isensmartcompagnion.screens.EventsScreen
 import fr.isen.leca.isensmartcompagnion.screens.HistoryScreen
 import fr.isen.leca.isensmartcompagnion.ui.theme.ISENSmartCompagnionTheme
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -62,11 +72,15 @@ fun NavigationApp() {
         }
     }
 }
+
 @Composable
 fun MainScreen() {
     var question by remember { mutableStateOf("") }
-    var response by remember { mutableStateOf("Pose-moi une question !") }
+    val responses = remember { mutableStateListOf<String>() }
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val database = ChatDatabase.getDatabase(context)
+    val chatDao = database.chatDao()
 
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -85,19 +99,22 @@ fun MainScreen() {
             modifier = Modifier.padding(top = 8.dp)
         )
 
-        Text(
-            text = response,
-            fontSize = 20.sp,
-            modifier = Modifier.padding(top = 16.dp).weight(1F),
-            color = Color.Black
-        )
+        // Liste des réponses de l'IA
+        LazyColumn(modifier = Modifier.fillMaxSize().weight(1F)) {
+            items(responses) { response ->
+                Text(
+                    text = response,
+                    fontSize = 18.sp,
+                    color = Color.Black,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
-                .background(Color(0xFFEFEFEF), RoundedCornerShape(30.dp))
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextField(
@@ -106,33 +123,45 @@ fun MainScreen() {
                 textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, color = Color.Black),
                 modifier = Modifier
                     .weight(1f)
-                    .background(Color.White, CircleShape)
-                    .padding(16.dp),
+                    .padding(8.dp),
                 placeholder = { Text("Pose ta question...") }
             )
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            IconButton(
-                onClick = {
-                    Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
-                    response = "Vous avez demandé : $question"
-                    question = ""
-                },
-                modifier = Modifier.size(48.dp).background(Color(0xFFD32F2F), CircleShape)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_send),
-                    contentDescription = "Envoyer",
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            Image(
+                painter = painterResource(id = R.drawable.ic_send),
+                contentDescription = "Envoyer",
+                modifier = Modifier.clickable {
+                    val trimmedQuestion = question.trim()
+
+                    if (trimmedQuestion.isNotEmpty()) {
+                        Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
+
+                        // Appel à Gemini pour récupérer la réponse
+                        coroutineScope.launch {
+                            val response = Gemini.getResponse(trimmedQuestion)
+                            responses.add("Vous : $trimmedQuestion") // Ajoute la question de l'utilisateur
+                            responses.add("Assistant : $response") // Ajoute la réponse de l'IA
+
+                            // Sauvegarde la question et la réponse dans la base de données
+                            val chatMessage = ChatMessage(
+                                question = trimmedQuestion,
+                                response = response
+                            )
+                            chatDao.insertMessage(chatMessage)
+
+                            // Réinitialisation du champ de saisie
+                            question = ""
+                        }
+                    } else {
+                        Toast.makeText(context, "Veuillez poser une question valide", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
         }
     }
 }
-
-
-
 
 
 @Composable
