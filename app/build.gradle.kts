@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("kotlin-parcelize")
+
 }
 
 android {
@@ -52,6 +54,12 @@ dependencies {
     implementation(libs.androidx.material.icons.core)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.material.icons.extended)
+    implementation("org.jetbrains.kotlin:kotlin-parcelize-runtime:2.0.21")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0") // Retrofit
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0") // Convertisseur JSON avec Gson
+    implementation("com.google.code.gson:gson:2.10.1") // Librairie Gson
+    implementation(platform("com.google.firebase:firebase-bom:33.12.0"))
+    implementation("com.google.firebase:firebase-vertexai")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

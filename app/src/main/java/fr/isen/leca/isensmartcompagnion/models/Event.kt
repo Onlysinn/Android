@@ -2,17 +2,18 @@ package fr.isen.leca.isensmartcompagnion.models
 
 import android.os.Parcel
 import android.os.Parcelable
+import com.google.gson.annotations.SerializedName
 
 data class Event(
-    val id: Int,
-    val title: String,
-    val description: String,
-    val date: String,
-    val location: String,
-    val category: String
+    @SerializedName("id") val id: String,
+    @SerializedName("title") val title: String,
+    @SerializedName("description") val description: String,
+    @SerializedName("date") val date: String,
+    @SerializedName("location") val location: String,
+    @SerializedName("category") val category: String
 ) : Parcelable {
     constructor(parcel: Parcel) : this(
-        parcel.readInt(),
+        parcel.readString() ?: "",
         parcel.readString() ?: "",
         parcel.readString() ?: "",
         parcel.readString() ?: "",
@@ -21,7 +22,7 @@ data class Event(
     )
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeInt(id)
+        parcel.writeString(id)
         parcel.writeString(title)
         parcel.writeString(description)
         parcel.writeString(date)
