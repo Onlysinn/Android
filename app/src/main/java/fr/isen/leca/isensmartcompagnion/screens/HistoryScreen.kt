@@ -40,6 +40,7 @@ fun HistoryScreen() {
             text = "Historique des conversations",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
+            color = Color(0xFFD32F2F),
             modifier = Modifier.padding(bottom = 16.dp)
         )
 

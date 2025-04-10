@@ -61,7 +61,7 @@ fun EventsScreen() {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp)
     ) {
-        Text(text = "Événements ISEN", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(text = "Événements ISEN", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
         Spacer(modifier = Modifier.height(16.dp))
 
         if (isLoading.value) {
