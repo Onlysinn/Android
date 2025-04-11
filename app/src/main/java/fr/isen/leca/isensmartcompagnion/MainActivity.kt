@@ -12,16 +12,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,15 +29,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
+import fr.isen.leca.isensmartcompagnion.api.RetrofitClient
 import fr.isen.leca.isensmartcompagnion.database.ChatDatabase
 import fr.isen.leca.isensmartcompagnion.database.ChatMessage
+import fr.isen.leca.isensmartcompagnion.models.Event
 import fr.isen.leca.isensmartcompagnion.models.Gemini
 import fr.isen.leca.isensmartcompagnion.screens.AgendaScreen
 import fr.isen.leca.isensmartcompagnion.screens.EventsScreen
 import fr.isen.leca.isensmartcompagnion.screens.HistoryScreen
+import fr.isen.leca.isensmartcompagnion.screens.getSubscribedEvents
 import fr.isen.leca.isensmartcompagnion.ui.theme.ISENSmartCompagnionTheme
 import kotlinx.coroutines.launch
-
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,9 +60,9 @@ fun NavigationApp() {
     val navController = rememberNavController()
 
     Scaffold(
-        bottomBar = { BottomNavigationBar(navController = navController) } // Ajout de la barre de navigation dans le Scaffold
+        bottomBar = { BottomNavigationBar(navController = navController) }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) { // Gestion des paddings pour éviter que le contenu ne soit caché par la bottomBar
+        Box(modifier = Modifier.padding(paddingValues)) {
             NavHost(navController = navController, startDestination = "home") {
                 composable("home") { MainScreen() }
                 composable("events") { EventsScreen() }
@@ -86,44 +86,24 @@ fun MainScreen() {
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "ISEN",
-            fontSize = 80.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFFD32F2F)
-        )
+        Text("ISEN", fontSize = 80.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
+        Text("Smart Companion", fontSize = 24.sp, modifier = Modifier.padding(top = 8.dp))
 
-        Text(
-            text = "Smart Companion",
-            fontSize = 24.sp,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-
-        // Liste des réponses de l'IA
-        LazyColumn(modifier = Modifier.fillMaxSize().weight(1F)) {
+        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
             items(responses) { response ->
-                Text(
-                    text = response,
-                    fontSize = 18.sp,
-                    color = Color.Black,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
+                Text(text = response, fontSize = 18.sp, color = Color.Black, modifier = Modifier.padding(8.dp))
             }
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextField(
                 value = question,
                 onValueChange = { question = it },
-                textStyle = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, color = Color.Black),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp),
+                textStyle = TextStyle(fontSize = 16.sp, color = Color.Black),
+                modifier = Modifier.weight(1f).padding(8.dp),
                 placeholder = { Text("Pose ta question...") }
             )
 
@@ -132,66 +112,109 @@ fun MainScreen() {
             Image(
                 painter = painterResource(id = R.drawable.ic_send),
                 contentDescription = "Envoyer",
-                modifier = Modifier.clickable {
-                    val trimmedQuestion = question.trim()
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable {
+                        val trimmed = question.trim()
 
-                    if (trimmedQuestion.isNotEmpty()) {
-                        Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
+                        if (trimmed.isNotEmpty()) {
+                            Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
 
-                        // Appel à Gemini pour récupérer la réponse
-                        coroutineScope.launch {
-                            val response = Gemini.getResponse(trimmedQuestion)
-                            responses.add("Vous : $trimmedQuestion") // Ajoute la question de l'utilisateur
-                            responses.add("Assistant : $response") // Ajoute la réponse de l'IA
-
-                            // Sauvegarde la question et la réponse dans la base de données
-                            val chatMessage = ChatMessage(
-                                question = trimmedQuestion,
-                                response = response
-                            )
-                            chatDao.insertMessage(chatMessage)
-
-                            // Réinitialisation du champ de saisie
-                            question = ""
+                            coroutineScope.launch {
+                                val response = Gemini.getResponse(trimmed)
+                                responses.add("Vous : $trimmed")
+                                responses.add("Assistant : $response")
+                                chatDao.insertMessage(ChatMessage(question = trimmed, response = response))
+                                question = ""
+                            }
+                        } else {
+                            Toast.makeText(context, "Veuillez poser une question valide", Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        Toast.makeText(context, "Veuillez poser une question valide", Toast.LENGTH_SHORT).show()
                     }
-                }
             )
+        }
+
+        Button(
+            onClick = {
+                Toast.makeText(context, "Résumé de l’agenda en cours...", Toast.LENGTH_SHORT).show()
+
+                RetrofitClient.instance.getEvents().enqueue(object : Callback<List<Event>> {
+                    override fun onResponse(call: Call<List<Event>>, response: Response<List<Event>>) {
+                        if (response.isSuccessful) {
+                            val allEvents = response.body() ?: emptyList()
+                            val subscribedEvents = getSubscribedEvents(context, allEvents)
+
+                            val staticCourses = listOf(
+                                "Maths - 9h à 10h",
+                                "Informatique - 10h15 à 11h45",
+                                "Physique - 13h30 à 15h",
+                                "Anglais - 15h15 à 17h"
+                            )
+
+                            val summary = buildString {
+                                append("Voici ton agenda du jour :\n\n")
+                                append("📚 Cours :\n")
+                                staticCourses.forEach { append("- $it\n") }
+                                append("\n📅 Événements abonnés :\n")
+                                if (subscribedEvents.isEmpty()) {
+                                    append("Aucun événement.\n")
+                                } else {
+                                    subscribedEvents.forEach { append("- ${it.title} (${it.date})\n") }
+                                }
+                            }
+
+                            coroutineScope.launch {
+                                val aiResponse = Gemini.getResponse(summary)
+                                responses.add("Résumé IA : $aiResponse")
+                                chatDao.insertMessage(ChatMessage(question = "Résumé agenda", response = aiResponse))
+                            }
+                        } else {
+                            Toast.makeText(context, "Erreur lors de la récupération des événements", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
+                    override fun onFailure(call: Call<List<Event>>, t: Throwable) {
+                        Toast.makeText(context, "Erreur réseau", Toast.LENGTH_SHORT).show()
+                    }
+                })
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Text("📖 Résumer mon agenda")
         }
     }
 }
 
-
 @Composable
 fun BottomNavigationBar(navController: NavController) {
     NavigationBar(
-        contentColor = Color.White,
+        containerColor = Color.White,
         modifier = Modifier.fillMaxWidth().padding(8.dp)
     ) {
         NavigationBarItem(
             selected = false,
             onClick = { navController.navigate("home") },
-            icon = { Icon(imageVector = Icons.Filled.Home, contentDescription = "Accueil") },
+            icon = { Icon(Icons.Filled.Home, contentDescription = "Accueil") },
             label = { Text("Accueil") }
         )
         NavigationBarItem(
             selected = false,
             onClick = { navController.navigate("events") },
-            icon = { Icon(imageVector = Icons.Filled.Event, contentDescription = "Événements") },
+            icon = { Icon(Icons.Filled.Event, contentDescription = "Événements") },
             label = { Text("Événements") }
         )
         NavigationBarItem(
             selected = false,
             onClick = { navController.navigate("agenda") },
-            icon = { Icon(imageVector = Icons.Filled.CalendarToday, contentDescription = "Agenda") },
+            icon = { Icon(Icons.Filled.CalendarToday, contentDescription = "Agenda") },
             label = { Text("Agenda") }
         )
         NavigationBarItem(
             selected = false,
             onClick = { navController.navigate("history") },
-            icon = { Icon(imageVector = Icons.Filled.History, contentDescription = "Historique") },
+            icon = { Icon(Icons.Filled.History, contentDescription = "Historique") },
             label = { Text("Historique") }
         )
     }

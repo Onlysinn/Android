@@ -157,3 +157,18 @@ fun getSubscribedEvents(context: Context, allEvents: List<Event>): List<Event> {
         prefs.getBoolean(event.id, false)
     }
 }
+
+fun getFullAgenda(context: Context, allEvents: List<Event>): List<String> {
+    val staticCourses = listOf(
+        "Maths - 9h à 10h",
+        "Informatique - 10h15 à 11h45",
+        "Physique - 13h30 à 15h",
+        "Anglais - 15h15 à 17h"
+    )
+
+    val subscribedEvents = getSubscribedEvents(context, allEvents).map {
+        "${it.title} - ${it.date}"
+    }
+
+    return staticCourses + subscribedEvents
+}
