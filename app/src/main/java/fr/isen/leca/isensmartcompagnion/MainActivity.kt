@@ -1,10 +1,11 @@
 package fr.isen.leca.isensmartcompagnion
 
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Image
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,13 +17,13 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,7 @@ import retrofit2.Callback
 import retrofit2.Response
 
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -55,6 +57,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun NavigationApp() {
     val navController = rememberNavController()
@@ -83,86 +86,106 @@ fun MainScreen() {
     val chatDao = database.chatDao()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("ISEN", fontSize = 80.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
-        Text("Smart Companion", fontSize = 24.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            "ISEN",
+            fontSize = 80.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFD32F2F)
+        )
+        Text(
+            "Smart Companion",
+            fontSize = 24.sp,
+            modifier = Modifier.padding(top = 8.dp)
+        )
 
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
             items(responses) { response ->
-                Text(text = response, fontSize = 18.sp, color = Color.Black, modifier = Modifier.padding(8.dp))
+                Text(
+                    text = response,
+                    fontSize = 18.sp,
+                    color = Color.Black,
+                    modifier = Modifier.padding(8.dp)
+                )
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextField(
                 value = question,
                 onValueChange = { question = it },
                 textStyle = TextStyle(fontSize = 16.sp, color = Color.Black),
-                modifier = Modifier.weight(1f).padding(8.dp),
+                modifier = Modifier.weight(1f),
                 placeholder = { Text("Pose ta question...") }
             )
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            Image(
-                painter = painterResource(id = R.drawable.ic_send),
-                contentDescription = "Envoyer",
-                modifier = Modifier
-                    .size(40.dp)
-                    .clickable {
-                        val trimmed = question.trim()
-
-                        if (trimmed.isNotEmpty()) {
-                            Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
-
-                            coroutineScope.launch {
-                                val response = Gemini.getResponse(trimmed)
-                                responses.add("Vous : $trimmed")
-                                responses.add("Assistant : $response")
-                                chatDao.insertMessage(ChatMessage(question = trimmed, response = response))
-                                question = ""
-                            }
-                        } else {
-                            Toast.makeText(context, "Veuillez poser une question valide", Toast.LENGTH_SHORT).show()
+            // Bouton d'envoi plus ergonomique
+            IconButton(
+                onClick = {
+                    val trimmed = question.trim()
+                    if (trimmed.isNotEmpty()) {
+                        Toast.makeText(context, "Question envoyée", Toast.LENGTH_SHORT).show()
+                        coroutineScope.launch {
+                            val response = Gemini.getResponse(trimmed)
+                            responses.add("Vous : $trimmed")
+                            responses.add("Assistant : $response")
+                            chatDao.insertMessage(ChatMessage(question = trimmed, response = response))
+                            question = ""
                         }
+                    } else {
+                        Toast.makeText(context, "Veuillez poser une question valide", Toast.LENGTH_SHORT).show()
                     }
-            )
+                },
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(Color(0xFFD32F2F), shape = CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Send,
+                    contentDescription = "Envoyer",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
 
         Button(
             onClick = {
                 Toast.makeText(context, "Résumé de l’agenda en cours...", Toast.LENGTH_SHORT).show()
-
                 RetrofitClient.instance.getEvents().enqueue(object : Callback<List<Event>> {
                     override fun onResponse(call: Call<List<Event>>, response: Response<List<Event>>) {
                         if (response.isSuccessful) {
                             val allEvents = response.body() ?: emptyList()
                             val subscribedEvents = getSubscribedEvents(context, allEvents)
-
                             val staticCourses = listOf(
                                 "Maths - 9h à 10h",
                                 "Informatique - 10h15 à 11h45",
                                 "Physique - 13h30 à 15h",
                                 "Anglais - 15h15 à 17h"
                             )
-
                             val summary = buildString {
                                 append("Voici ton agenda du jour :\n\n")
                                 append("📚 Cours :\n")
                                 staticCourses.forEach { append("- $it\n") }
                                 append("\n📅 Événements abonnés :\n")
-                                if (subscribedEvents.isEmpty()) {
-                                    append("Aucun événement.\n")
-                                } else {
-                                    subscribedEvents.forEach { append("- ${it.title} (${it.date})\n") }
-                                }
+                                if (subscribedEvents.isEmpty()) append("Aucun événement.\n")
+                                else subscribedEvents.forEach { append("- ${it.title} (${it.date})\n") }
                             }
-
                             coroutineScope.launch {
                                 val aiResponse = Gemini.getResponse(summary)
                                 responses.add("Résumé IA : $aiResponse")
@@ -172,7 +195,6 @@ fun MainScreen() {
                             Toast.makeText(context, "Erreur lors de la récupération des événements", Toast.LENGTH_SHORT).show()
                         }
                     }
-
                     override fun onFailure(call: Call<List<Event>>, t: Throwable) {
                         Toast.makeText(context, "Erreur réseau", Toast.LENGTH_SHORT).show()
                     }
@@ -191,7 +213,9 @@ fun MainScreen() {
 fun BottomNavigationBar(navController: NavController) {
     NavigationBar(
         containerColor = Color.White,
-        modifier = Modifier.fillMaxWidth().padding(8.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
     ) {
         NavigationBarItem(
             selected = false,
