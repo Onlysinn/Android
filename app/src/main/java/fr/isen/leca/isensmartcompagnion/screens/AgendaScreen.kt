@@ -1,7 +1,11 @@
 package fr.isen.leca.isensmartcompagnion.screens
 
 import android.content.Context
+import android.os.Build
 import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,17 +18,27 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kizitonwose.calendar.compose.HorizontalCalendar
+import com.kizitonwose.calendar.compose.rememberCalendarState
+import com.kizitonwose.calendar.core.WeekDay
+import com.kizitonwose.calendar.core.yearMonth
 import fr.isen.leca.isensmartcompagnion.api.RetrofitClient
 import fr.isen.leca.isensmartcompagnion.models.Event
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AgendaScreen() {
     val context = LocalContext.current
-    val eventsList = remember { mutableStateOf<List<Event>>(emptyList()) }
     val isLoading = remember { mutableStateOf(true) }
+    val allSubscribedEvents = remember { mutableStateOf<List<Event>>(emptyList()) }
+    val selectedDate = remember { mutableStateOf(LocalDate.now()) }
 
     val staticCourses = listOf(
         "Maths - 9h à 10h",
@@ -33,14 +47,13 @@ fun AgendaScreen() {
         "Anglais - 15h15 à 17h"
     )
 
-    // Récupération des événements depuis l’API
+    // Appel API
     LaunchedEffect(Unit) {
         RetrofitClient.instance.getEvents().enqueue(object : Callback<List<Event>> {
             override fun onResponse(call: Call<List<Event>>, response: Response<List<Event>>) {
                 if (response.isSuccessful) {
                     val allEvents = response.body() ?: emptyList()
-                    val subscribed = getSubscribedEvents(context, allEvents)
-                    eventsList.value = subscribed
+                    allSubscribedEvents.value = getSubscribedEvents(context, allEvents)
                 } else {
                     Toast.makeText(context, "Erreur serveur", Toast.LENGTH_SHORT).show()
                 }
@@ -54,93 +67,91 @@ fun AgendaScreen() {
         })
     }
 
+    val eventsForSelectedDate = remember(selectedDate.value, allSubscribedEvents.value) {
+        allSubscribedEvents.value.filter { event ->
+            try {
+                LocalDate.parse(event.date, DateTimeFormatter.ISO_DATE) == selectedDate.value
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.White)
             .padding(16.dp)
     ) {
-        Text(
-            "Agenda de l’étudiant",
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFFD32F2F) // Rouge ISEN
-        )
+        Text("Agenda ISEN", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F))
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            "Cours du jour",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.Black
-        )
+        // Calendrier interactif
+        val currentMonth = remember { YearMonth.now() }
+        val startMonth = remember { currentMonth.minusMonths(3) }
+        val endMonth = remember { currentMonth.plusMonths(3) }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyColumn {
-            items(staticCourses) { course ->
-                Card(
+        HorizontalCalendar(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp),
+            state = rememberCalendarState(
+                startMonth = startMonth,
+                endMonth = endMonth,
+                firstDayOfWeek = DayOfWeek.MONDAY
+            ),
+            dayContent = { day ->
+                val isSelected = day.date == selectedDate.value
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF9F9F9)),
-                    elevation = CardDefaults.cardElevation(2.dp)
+                        .aspectRatio(1f)
+                        .padding(4.dp)
+                        .background(
+                            if (isSelected) Color(0xFFD32F2F) else Color(0xFFEEEEEE),
+                            shape = MaterialTheme.shapes.small
+                        )
+                        .clickable { selectedDate.value = day.date },
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = course,
-                        modifier = Modifier.padding(16.dp),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
+                        text = day.date.dayOfMonth.toString(),
+                        color = if (isSelected) Color.White else Color.Black
                     )
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        Text(
-            "Événements abonnés",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.Black
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Cours du jour :", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+        LazyColumn {
+            items(staticCourses) { course ->
+                Text(course, modifier = Modifier.padding(4.dp), fontSize = 16.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Événements abonnés :", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
 
         if (isLoading.value) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+            CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
         } else {
-            if (eventsList.value.isEmpty()) {
-                Text(
-                    "Aucun événement abonné.",
-                    fontSize = 16.sp,
-                    modifier = Modifier.padding(8.dp),
-                    color = Color.Gray
-                )
+            if (eventsForSelectedDate.isEmpty()) {
+                Text("Aucun événement pour cette date.", modifier = Modifier.padding(top = 8.dp))
             } else {
                 LazyColumn {
-                    items(eventsList.value) { event ->
+                    items(eventsForSelectedDate) { event ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFB71C1C)), // Rouge foncé ISEN
-                            elevation = CardDefaults.cardElevation(4.dp)
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFD32F2F))
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = event.title,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                Text(
-                                    text = event.date,
-                                    fontSize = 14.sp,
-                                    color = Color.White
-                                )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(event.title, fontSize = 16.sp, color = Color.White)
+                                Text(event.date, fontSize = 14.sp, color = Color.White)
                             }
                         }
                     }
@@ -150,25 +161,7 @@ fun AgendaScreen() {
     }
 }
 
-// Fonction utilitaire pour filtrer les événements abonnés depuis les SharedPreferences
 fun getSubscribedEvents(context: Context, allEvents: List<Event>): List<Event> {
     val prefs = context.getSharedPreferences("event_preferences", Context.MODE_PRIVATE)
-    return allEvents.filter { event ->
-        prefs.getBoolean(event.id, false)
-    }
-}
-
-fun getFullAgenda(context: Context, allEvents: List<Event>): List<String> {
-    val staticCourses = listOf(
-        "Maths - 9h à 10h",
-        "Informatique - 10h15 à 11h45",
-        "Physique - 13h30 à 15h",
-        "Anglais - 15h15 à 17h"
-    )
-
-    val subscribedEvents = getSubscribedEvents(context, allEvents).map {
-        "${it.title} - ${it.date}"
-    }
-
-    return staticCourses + subscribedEvents
+    return allEvents.filter { event -> prefs.getBoolean(event.id, false) }
 }
